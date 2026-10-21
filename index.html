@@ -98,7 +98,7 @@ let S=(()=>{try{const r=JSON.parse(localStorage.getItem(K));if(r&&r.cards)return
 const save=()=>{try{localStorage.setItem(K,JSON.stringify(S))}catch(e){}};
 let T="study",E=null,P=null,F={q:"",d:"All"},Q={on:false,mode:"mixed",queue:[],i:0,done:0};
 let tt;
-function toast(m){const t=$("#toast");t.textContent=m;t.style.opacity=1;clearTimeout(tt);tt=setTimeout(()=>t.style.opacity=0,2200)}
+function toast(m){const t=$("#toast"),w=/…$/.test(m);t.textContent=(w?"⏳ ":"")+m;t.style.opacity=1;clearTimeout(tt);tt=setTimeout(()=>t.style.opacity=0,w?90000:5000);if(!w&&/✓|finished|added|moved|saved|created|removed|restored|downloaded/i.test(m)){try{navigator.vibrate&&navigator.vibrate(25)}catch(e){}}}
 function theme(){const r=document.documentElement;r.dataset.pal=S.set.pal;if(S.set.theme==="auto")r.removeAttribute("data-theme");else r.dataset.theme=S.set.theme;r.style.fontSize=S.set.fs+"px"}
 
 // ---------- SM-2 (q: 1 Again, 3 Hard, 4 Good, 5 Easy) ----------
@@ -122,7 +122,7 @@ function mic(cb){
  if(!R){const s=D[Math.floor(Math.random()*D.length)];toast("No speech recognition here – simulated input");cb(full({art:s[1],de:s[2]}));return}
  try{const r=new R();r.lang="de-DE";r.onresult=e=>cb(e.results[0][0].transcript);r.onerror=()=>toast("Couldn’t hear anything");r.start();toast("Listening…")}catch(e){toast("Microphone unavailable")}}
 const have=k=>D.filter(e=>e[0]===k).every(e=>S.cards.some(c=>c.deck===CN[k]&&c.de===e[2]));
-const inst=k=>D.filter(e=>e[0]===k).forEach(e=>{if(!S.cards.some(c=>c.deck===CN[k]&&c.de===e[2]))S.cards.push(mk({deck:CN[k],art:e[1],de:e[2],pl:e[3],icon:e[4],def:e[5],en:e[6],note:e[7],tags:[k.toLowerCase()]}))});
+const inst=k=>(S.inst=S.inst||{},S.inst[k]=1,D.filter(e=>e[0]===k)).forEach(e=>{if(!S.cards.some(c=>c.deck===CN[k]&&c.de===e[2]))S.cards.push(mk({deck:CN[k],art:e[1],de:e[2],pl:e[3],icon:e[4],def:e[5],en:e[6],note:e[7],tags:[k.toLowerCase()]}))});
 function streak(){let n=0,d=new Date();if(!(S.log[today()]||{}).r)d.setDate(d.getDate()-1);while((S.log[dk(d)]||{}).r){n++;d.setDate(d.getDate()-1)}return n}
 
 // ---------- forms ----------
@@ -188,7 +188,7 @@ function lookupCard(){const on=navigator.onLine;return `<h2>Look up words</h2><d
 const deckBar=()=>{const n=S.cards.filter(c=>c.deck===F.d).length;return `<div class="card"><b>${esc(F.d)}</b> <span class="mut">· ${n} cards</span><div class="row" style="margin-top:8px"><input id="dn" value="${esc(F.d)}"><button class="s" data-a="drename">Rename</button></div><p class="mut">Renaming to an existing deck name merges the two decks.</p><button class="s w" data-a="ddel" data-n="${n}">Delete deck and its ${n} cards</button></div>`};
 let RS=null;
 const rsBar=()=>{const inc=`<label class="row mut" style="margin:6px 0"><input type="checkbox" id="rinc" style="width:auto" ${F.inc?"checked":""}> Also check my own decks and course decks</label>`;
- const un=S.undo&&S.undo.m&&S.undo.m.length?`<button class="s w" style="margin-bottom:10px" data-a="rundo">↩ Undo last resort (${S.undo.m.length} cards)</button>`:"";
+ const un=S.undo&&((S.undo.m&&S.undo.m.length)||(S.undo.rm&&S.undo.rm.length))?`<button class="s w" style="margin-bottom:10px" data-a="rundo">↩ Undo last resort (${(S.undo.m||[]).length+(S.undo.rm||[]).length} cards)</button>`:"";
  const plan=RS?`<div class="card"><b>Confirm moves</b><div class="mut">These cards would leave their current deck. Untick any you want to keep where they are.</div>${RS.moves.map((m,i)=>{const c=S.cards.find(x=>x.id===m.id);return c?`<label class="row" style="align-items:flex-start;margin:8px 0"><input type="checkbox" data-mv="${i}" ${m.on?"checked":""} style="width:auto;margin-top:4px"><span><b>${esc(full(c))}</b><br><span class="mut">${esc(m.from)} → ${esc(m.to)}</span></span></label>`:""}).join("")}<div class="row"><button class="p" data-a="rapply">Apply selected</button><button class="s" data-a="rcancel">Cancel</button></div></div>`:"";
  return `<button class="s w" style="margin:6px 0" data-a="selmode">${SEL.on?"✕ Leave selection mode":"☑ Select cards (move or copy into a new deck)"}</button>`+inc+un+plan};
 async function cls(part){const pr=`Classify these German flashcards. For each give the CEFR level (exactly one of A1, A2, B1, B2, C1, C2) and the best-fitting topic (exactly one of [${TP.join(", ")}]). Return a JSON array only: [{"id":number,"lvl":"A1","topic":"Food & Drink"}].\nCards: ${JSON.stringify(part.map(c=>({id:c.id,de:full(c),en:c.en,def:c.def})))}`;const t=await ask(pr),a=JSON.parse(t.slice(t.indexOf("["),t.lastIndexOf("]")+1)),r={};a.forEach(x=>{if(x&&x.id!=null)r[x.id]=x});return r}
@@ -218,6 +218,11 @@ const heat=()=>{const c=[];for(let i=34;i>=0;i--){const d=new Date();d.setDate(d
  const f=[...Array(7)].map((_,i)=>{const a=new Date();a.setHours(0,0,0,0);const s=a.getTime()+i*864e5;return act().filter(x=>x.n>0&&x.due<s+864e5&&(i===0||x.due>=s)).length}),mx=Math.max(1,...f);
  return `<div class="card"><b>Study calendar</b><div class="mut">Last 35 days – darker means more reviews</div><div class="hm">${c.join("")}</div></div><div class="card"><b>Reviews coming up</b><div class="bars">${f.map((n,i)=>{const d=new Date();d.setDate(d.getDate()+i);return `<div class="bar"><small class="mut">${n||""}</small><i style="height:${Math.round(n/mx*80)}%"></i><small class="mut">${["Su","Mo","Tu","We","Th","Fr","Sa"][d.getDay()]}</small></div>`}).join("")}</div></div>`};
 const backupCard=()=>`<div class="card"><b>Backup file</b><div class="mut">Saves all cards, progress and settings (not your API keys) to a file on your phone.</div><button class="p w" style="margin:8px 0" data-a="bkdl">⬇️ Download backup file</button><label class="mut">Restore from a backup file (adds any missing cards)</label><input type="file" id="rf" accept=".json,application/json"></div>`;
+function dedupe(){const g={};S.cards.forEach(c=>{if(c.cp)return;const k=nf(full(c));(g[k]=g[k]||[]).push(c)});const rm=[];
+ const sc=c=>(c.n||0)*1000+(grp(c.deck)!=="Other"?100:0)-c.id/1e6;
+ Object.values(g).forEach(a=>{if(a.length<2)return;a.sort((x,y)=>sc(y)-sc(x));const k=a[0];
+  a.slice(1).forEach(d=>{["def","dx","en","ex","exe","note","pl","kind"].forEach(f=>{if(!k[f]&&d[f])k[f]=d[f]});if((k.icon||"🔤")==="🔤"&&d.icon)k.icon=d.icon;k.tags=[...new Set([...(k.tags||[]),...(d.tags||[])])];if(d.st)k.st=true;rm.push(d)})});
+ if(rm.length){const ids=new Set(rm.map(c=>c.id));S.cards=S.cards.filter(c=>!ids.has(c.id))}return rm}
 // ---------- automatic decks: level + topic ----------
 const topicOf=t=>{t=String(t||"").trim();const m=TP.find(x=>x.toLowerCase()===t.toLowerCase());return m||(t?t[0].toUpperCase()+t.slice(1):"")};
 const autoDeck=r=>{const l=String(r.lvl||"").toUpperCase().trim(),t=topicOf(r.topic);return /^[ABC][12]$/.test(l)&&t?l+" · "+t:"Looked up"};
@@ -254,7 +259,7 @@ const list=()=>{const q=F.q.toLowerCase(),r=S.cards.filter(c=>(F.d==="All"||c.de
 function lib(){if(V!==null){const c=S.cards.find(x=>x.id===V.id);if(c)return pview(c);V=null}
  if(E!==null){const c=S.cards.find(x=>x.id===E);if(c)return `<h2>Edit card</h2><div class="card">${form(c)}<div class="row" style="margin-top:10px"><button class="p" data-a="saveEdit">Save</button><button class="s" data-a="cancel">Cancel</button><button class="s" data-a="del">Delete</button></div></div>`;E=null}
  const decks=[...new Set(S.cards.map(c=>c.deck))].sort();
- return `<h2>Library</h2><div class="card"><b>Offline courses</b>`+Object.keys(CN).map(k=>{const ok=have(k);return `<div class="row sp" style="margin-top:8px"><span>${CN[k]}<br><small class="mut">${D.filter(e=>e[0]===k).length} cards · stored on this device</small></span><button class="${ok?"s":"p"}" data-a="inst" data-k="${k}" ${ok?"disabled":""}>${ok?"Saved ✓":"Save offline"}</button></div>`}).join("")+`</div>`+
+ return `<h2>Library</h2><div class="card"><b>Offline courses</b>`+Object.keys(CN).map(k=>{const ok=have(k)||!!(S.inst&&S.inst[k])||D.some(e=>e[0]===k&&S.cards.some(c=>c.de===e[2]&&(c.tags||[]).includes(k.toLowerCase())));return `<div class="row sp" style="margin-top:8px"><span>${CN[k]}<br><small class="mut">${D.filter(e=>e[0]===k).length} cards · stored on this device</small></span><button class="${ok?"s":"p"}" data-a="inst" data-k="${k}" ${ok?"disabled":""}>${ok?"Saved ✓":"Save offline"}</button></div>`}).join("")+`</div>`+
  `<button class="p w" style="margin-bottom:8px" data-a="resort">🗂️ Resort cards by level and topic</button><div class="mut" style="margin-bottom:10px">Moves cards out of “Looked up”, “Pasted words”, “My Words” and old “Online” decks into level + topic decks. Decks you named yourself are not touched.</div>${rsBar()}${deckTree()}<input id="q" placeholder="Search words, tags, decks…" value="${esc(F.q)}"><div class="row wrap" style="margin:8px 0"><button class="${F.d==="All"?"p":"s"}" data-a="deck" data-v="All">All decks (show every card)</button></div>${selBar()}${F.d!=="All"?deckBar():""}<div id="list">${list()}</div>`}
 
 const cur=()=>S.cards.find(x=>x.id===Q.queue[Q.i]);
@@ -370,7 +375,7 @@ Object.assign(H,{
   if(!ws.length)return toast("Type at least one word");
   let sm=null;try{sm=await claude.use("sample")}catch(e){}
   
-  LK.busy=1;LK.res=null;render();
+  LK.busy=1;LK.res=null;render();toast("Looking up "+ws.length+" word"+(ws.length>1?"s":"")+"…");
   const pr=`You are a German dictionary. For each input below identify the intended German word or phrase (fix spelling mistakes; if ambiguous pick the most common meaning): ${ws.join(" | ")}\nReturn a JSON array only, one item per input, in order: {"de":"headword without article","art":"der|die|das or empty","pl":"plural or empty","icon":"one emoji","en":"main English meaning","def":"German-only explanation, one sentence","dx":"English translation of def","ex":"German example sentence","exe":"English translation of the example","note":"English grammar notes","lvl":"CEFR level","found":true}`;
   try{LK.res=(await lookAll(ws,pr)).filter(x=>x&&x.de).map(x=>({...x,ok:x.found!==false}));LK.busy=0;H.lksave()}catch(e){toast(e&&e.msg?e.msg:"Couldn’t look those up – check your connection")}
   LK.busy=0;render()},
@@ -393,27 +398,27 @@ Object.assign(H,{
    if(/^[ABC][12]$/.test(l)&&t){c.deck=l+" · "+t;if(!(c.tags||[]).includes(l.toLowerCase()))c.tags=[...(c.tags||[]),l.toLowerCase()];ds.add(c.deck);moved++}else left++});
   save();render();toast(moved+" cards moved into "+ds.size+" decks"+(left?" · "+left+" couldn’t be classified yet":""))},
  resort:async()=>{
-  const before=new Map(S.cards.map(c=>[c.id,{deck:c.deck,tags:[...(c.tags||[])]}]));
+  const rm=dedupe();const before=new Map(S.cards.map(c=>[c.id,{deck:c.deck,tags:[...(c.tags||[])]}]));
   RS=null;await H.resort0();
   const mv=S.cards.filter(c=>before.has(c.id)&&before.get(c.id).deck!==c.deck).map(c=>c.id);
-  S.undo=mv.length?{m:mv.map(id=>({id,deck:before.get(id).deck,tags:before.get(id).tags}))}:null;
+  S.undo=(mv.length||rm.length)?{m:mv.map(id=>({id,deck:before.get(id).deck,tags:before.get(id).tags})),rm}:null;
   const auto=c=>{const m=c.deck.match(/^([ABC][12]) · (.+)$/);return !!m&&TP.includes(m[2])},inb=c=>/^(Looked up|Pasted words|My Words|Online · )/.test(c.deck);
   const cs=S.cards.filter(c=>!mv.includes(c.id)&&(auto(c)||(F.inc&&!inb(c)))),moves=[];
   if(cs.length){toast("Checking "+cs.length+" cards for better decks…");
    try{for(let i=0;i<cs.length;i+=40){const part=cs.slice(i,i+40),r=await cls(part);part.forEach(c=>{const x=r[c.id];if(!x)return;const l=String(x.lvl||"").toUpperCase().trim(),t=topicOf(x.topic),to=/^[ABC][12]$/.test(l)&&t?l+" · "+t:"";if(to&&to!==c.deck)moves.push({id:c.id,from:c.deck,to,on:true})})}}
    catch(e){toast(e&&e.msg?e.msg:"Couldn’t check the other cards – check your AI source in Settings")}}
   RS=moves.length?{moves}:null;save();render();
-  if(moves.length)toast(moves.length+" cards would move between decks – please review them")},
+  const parts=[];if(rm.length)parts.push(rm.length+" duplicate cards removed");if(mv.length)parts.push(mv.length+" cards sorted into decks");if(moves.length)parts.push(moves.length+" cards to review below");toast("Resort finished ✓ "+(parts.length?"– "+parts.join(" · "):"– nothing needed changing"))},
  rapply:()=>{const ms=(RS?RS.moves:[]).filter(m=>m.on);if(!ms.length){RS=null;render();return toast("Nothing was moved")}
   const un=S.undo&&S.undo.m?[...S.undo.m]:[];let n=0;
   ms.forEach(m=>{const c=S.cards.find(x=>x.id===m.id);if(!c)return;un.push({id:c.id,deck:c.deck,tags:[...(c.tags||[])]});c.deck=m.to;const l=m.to.slice(0,2).toLowerCase();if(!(c.tags||[]).includes(l))c.tags=[...(c.tags||[]),l];n++});
-  S.undo={m:un};RS=null;save();render();toast(n+" cards moved")},
+  S.undo={m:un,rm:(S.undo&&S.undo.rm)||[]};RS=null;save();render();toast(n+" cards moved")},
  rcancel:()=>{RS=null;render();toast("Nothing was moved")},
- rundo:()=>{(S.undo&&S.undo.m||[]).forEach(u=>{const c=S.cards.find(x=>x.id===u.id);if(c){c.deck=u.deck;c.tags=u.tags}});S.undo=null;RS=null;save();render();toast("Last resort undone")},
+ rundo:()=>{(S.undo&&S.undo.m||[]).forEach(u=>{const c=S.cards.find(x=>x.id===u.id);if(c){c.deck=u.deck;c.tags=u.tags}});(S.undo&&S.undo.rm||[]).forEach(c=>{if(!S.cards.some(x=>x.id===c.id))S.cards.push(c)});S.undo=null;RS=null;save();render();toast("Last resort undone")},
  selmode:()=>{SEL.on=!SEL.on;SEL.ids=[];render()},
  sall:()=>{document.querySelectorAll("[data-sel]").forEach(i=>{const id=+i.dataset.sel;if(!SEL.ids.includes(id))SEL.ids.push(id)});render()},
  smove:()=>{const d=($("#sd").value||"").trim();if(!d)return toast("Type a deck name first");if(!SEL.ids.length)return toast("Select some cards first");S.cards.forEach(c=>{if(SEL.ids.includes(c.id))c.deck=d});const n=SEL.ids.length;SEL.ids=[];save();render();toast(n+" cards moved to “"+d+"”")},
- scopy:()=>{const d=($("#sd").value||"").trim();if(!d)return toast("Type a deck name first");if(!SEL.ids.length)return toast("Select some cards first");const src=S.cards.filter(c=>SEL.ids.includes(c.id));src.forEach(c=>S.cards.push(mk({deck:d,art:c.art,de:c.de,pl:c.pl,icon:c.icon,def:c.def,dx:c.dx,en:c.en,ex:c.ex,exe:c.exe,note:c.note,tags:[...(c.tags||[])]})));SEL.ids=[];save();render();toast(src.length+" cards copied to “"+d+"” as new cards")},
+ scopy:()=>{const d=($("#sd").value||"").trim();if(!d)return toast("Type a deck name first");if(!SEL.ids.length)return toast("Select some cards first");const src=S.cards.filter(c=>SEL.ids.includes(c.id));src.forEach(c=>{const x=mk({deck:d,art:c.art,de:c.de,pl:c.pl,icon:c.icon,def:c.def,dx:c.dx,en:c.en,ex:c.ex,exe:c.exe,note:c.note,tags:[...(c.tags||[])]});x.cp=true;S.cards.push(x)});SEL.ids=[];save();render();toast(src.length+" cards copied to “"+d+"” as new cards")},
  star:el=>{const c=S.cards.find(x=>x.id===+el.dataset.id);if(c){c.st=!c.st;save();render()}},
  bkdl:()=>{try{const {keys,...set}=S.set,blob=new Blob([JSON.stringify({v:1,cards:S.cards,set,log:S.log,off:S.off||[]})],{type:"application/json"}),a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="wortschatz-backup-"+today()+".json";document.body.appendChild(a);a.click();a.remove();S.set.bk=Date.now();save();toast("Backup file downloaded")}catch(e){toast("Couldn’t create the backup file here")}},
  uml:el=>{const i=$("#ans"),s=i.selectionStart==null?i.value.length:i.selectionStart;i.value=i.value.slice(0,s)+el.dataset.v+i.value.slice(s);i.focus();i.setSelectionRange(s+1,s+1)},
@@ -426,7 +431,7 @@ Object.assign(H,{
   if(!O.lv.length||!O.ty.length||!tp.length)return toast("Pick at least one level, topic and card type");
   let sm=null;try{sm=await claude.use("sample")}catch(e){}
   
-  O.busy=1;render();
+  O.busy=1;render();toast("Generating "+O.n+" cards…");
   const known=S.cards.map(c=>c.de).join("; ").slice(0,500);
   const pr=`You are a German lexicographer. Create exactly ${O.n} German flashcards as a JSON array and nothing else (no prose, no markdown).\nCEFR levels: ${O.lv.join(", ")}. Topics: ${tp.join(", ")}. Card types: ${O.ty.join(", ")}.\nQuality bar: advanced, rigorous, professional-grade terms – for C1/C2 use academic, technical and specialist register; never elementary words (Haus, Buch, essen…) above A2. Check gender, plural and verb forms carefully. Do not repeat: ${known||"none"}.\nEach item: {"de":"word or phrase without article","art":"der|die|das or empty","pl":"plural or empty","type":"vocabulary|phrases|verbs|adjectives|idioms","lvl":"C1","topic":"one of the topics","icon":"one emoji","def":"German-only explanation, one sentence","dx":"accurate English translation of def","ex":"one natural German example sentence","exe":"English translation of the example","en":"English translation of the word or phrase","note":"English grammar notes"}`;
   try{
